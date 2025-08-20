@@ -5,7 +5,7 @@ import time
 from datetime import datetime, timedelta
 
 import smbus2
-import bme280
+from bme280 import BME280
 import RPi.GPIO as GPIO
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -26,15 +26,14 @@ LED_GND = 14  # Не используется в коде, просто подк
 
 # Инициализация GPIO
 GPIO.setmode(GPIO.BCM)
+GPIO.setwarnings(False)  # Отключаем предупреждения о пинах
 GPIO.setup(RED_PIN, GPIO.OUT)
 GPIO.setup(GREEN_PIN, GPIO.OUT)
 GPIO.setup(BLUE_PIN, GPIO.OUT)
 
-# Инициализация BME280 (простая библиотека)
-port = 1
-address = 0x76  # Или 0x77, в зависимости от твоего датчика (проверь i2cdetect)
-bus = smbus2.SMBus(port)
-calibration_params = bme280.load_calibration_params(bus, address)
+# Инициализация BME280 (используем класс BME280)
+bus = smbus2.SMBus(1)
+bme = BME280(i2c_dev=bus, i2c_addr=0x76)  # Или 0x77, проверь i2cdetect
 
 # Инициализация БД
 conn = sqlite3.connect(DB_FILE)
@@ -66,10 +65,9 @@ def update_led(temp):
 # Функция чтения и сохранения данных
 async def read_and_save(bot):
     try:
-        data = bme280.sample(bus, address, calibration_params)
-        temp = data.temperature
-        hum = data.humidity
-        pres = data.pressure
+        temp = bme.get_temperature()
+        hum = bme.get_humidity()
+        pres = bme.get_pressure()
         timestamp = datetime.now().isoformat()
 
         cursor.execute('INSERT INTO measurements VALUES (?, ?, ?, ?)', (timestamp, temp, hum, pres))
@@ -139,10 +137,9 @@ async def current(callback: types.CallbackQuery):
         await callback.answer("Доступ запрещен.")
         return
     try:
-        data = bme280.sample(bus, address, calibration_params)
-        temp = data.temperature
-        hum = data.humidity
-        pres = data.pressure
+        temp = bme.get_temperature()
+        hum = bme.get_humidity()
+        pres = bme.get_pressure()
         await callback.message.answer(f"Текущие:\nТемп: {temp:.2f}°C\nВлаж: {hum:.2f}%\nДавл: {pres:.2f} hPa")
     except Exception as e:
         await callback.message.answer(f"Ошибка: {str(e)}")
